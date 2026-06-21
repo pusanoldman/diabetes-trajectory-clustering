@@ -1,0 +1,136 @@
+# Diabetes Trajectory Clustering
+
+당뇨병 발생 전후 임상변수 trajectory와 진단 시점 변수를 이용해 환자 아형을 clustering하는 분석 저장소입니다.
+
+이 저장소에는 실행 코드와 문서만 포함합니다. 개인/연구 데이터(`data.csv`), 원본 `.docx`, 논문 PDF, 결과물은 공개 GitHub에 올리지 않도록 `.gitignore`에 제외했습니다.
+
+## 연구 질문
+
+- 당뇨병이 발생하기까지 주요 임상변수의 trajectory로 DM progressor subtype을 나눌 수 있는가?
+- 어떤 subtype에서 혈당 상승이 빠르게 일어나고, 조기 중재가 필요한가?
+- baseline 또는 진단 시점의 임상변수 조합으로 subtype을 예측할 수 있는가?
+
+## 데이터 구조
+
+예상 입력 파일은 wide-format CSV입니다.
+
+- 개인 ID: `RID`
+- 당뇨병 발생 여부: `status_당뇨병`
+- 당뇨병 발생 또는 추적 기간: `tt_당뇨병`
+- 반복 측정 변수: `AS1_BMI`, `AS2_BMI`, ..., `AS10_BMI`처럼 `AS{기수}_{변수명}` 구조
+- 추적 시간 변수: `AS2_FU_YEAR` 또는 `AS2_검진개월수`처럼 기수별 추적 기간
+
+현재 연구 메모 기준으로 전체 10020명 중 기존 당뇨병 환자를 제외한 7850명을 최대 20년 추적했고, 추적 중 당뇨병 발생자는 2066명입니다.
+
+## 설치
+
+```bash
+git clone https://github.com/pusanoldman/diabetes-trajectory-clustering.git
+cd diabetes-trajectory-clustering
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+macOS/Linux에서는 가상환경 활성화 명령만 다릅니다.
+
+```bash
+source .venv/bin/activate
+```
+
+Jupyter Notebook/Lab은 분석 필수 의존성에서 제외했습니다. 이미 쓰는 Jupyter 환경에서 이 저장소를 열거나, 필요할 때만 별도로 설치하세요.
+
+```bash
+pip install notebook ipykernel
+```
+
+## 데이터 넣기
+
+로컬에서만 다음 위치에 CSV를 넣습니다.
+
+```text
+data/data.csv
+```
+
+`data/` 폴더는 `.gitignore` 처리되어 있으므로 실제 데이터는 GitHub에 올라가지 않습니다.
+
+## 바로 실행
+
+Trajectory feature 기반 clustering:
+
+```bash
+python scripts/run_clustering.py --config configs/example_trajectory_config.json
+```
+
+진단 시점 또는 진단 직전 값 기반 clustering:
+
+```bash
+python scripts/run_clustering.py --config configs/example_diagnosis_config.json
+```
+
+데이터 경로와 결과 폴더를 직접 지정할 수도 있습니다.
+
+```bash
+python scripts/run_clustering.py --data "C:\Users\me\Desktop\data.csv" --out outputs/my_run --mode trajectory --k 4
+```
+
+## Jupyter에서 실행
+
+```python
+import sys
+from pathlib import Path
+
+repo = Path.cwd()
+sys.path.insert(0, str(repo / "src"))
+
+from diabetes_trajectory_clustering import run_from_config
+
+result = run_from_config(
+    "configs/example_trajectory_config.json",
+    data_path="data/data.csv",
+    out_dir="outputs/trajectory"
+)
+
+result["cluster_sizes"]
+result["k_evaluation"]
+```
+
+## 주요 설정
+
+설정 파일은 `configs/` 아래 JSON 파일을 수정하면 됩니다.
+
+- `analysis_mode`: `trajectory` 또는 `diagnosis`
+- `cluster_base_vars`: clustering에 넣을 AS 반복측정 변수의 base name
+- `k_primary`: 최종 cluster 개수
+- `k_range`: k 비교 범위
+- `cluster_method`: `kmeans`, `gmm`, `hierarchical`
+- `window_years`: 진단 전 몇 년까지 볼지
+- `min_visits`: trajectory 분석에 필요한 최소 관찰 기수 수
+- `transforms`: log/log1p 변환할 변수
+- `nonpositive_as_na`: 0 이하 값을 결측 처리할 변수
+
+## 결과물
+
+실행 후 `outputs/` 아래에 다음 파일들이 생성됩니다.
+
+- `available_as_base_variables.csv`: 데이터에서 감지된 AS base 변수 목록
+- `feature_matrix_before_imputation.csv`: 결측 대체 전 feature matrix
+- `feature_matrix_imputed.csv`: 결측 대체 후 feature matrix
+- `k_evaluation.csv`: k별 silhouette, Calinski-Harabasz, Davies-Bouldin 지표
+- `cluster_assignments.csv`: 개인별 cluster 배정
+- `cluster_sizes.csv`: cluster별 대상자 수
+- `cluster_feature_means.csv`: cluster별 feature 평균
+- `cluster_feature_zmeans.csv`: 표준화 scale의 cluster profile
+- `long_data_with_clusters.csv`: long-format 반복측정 자료와 cluster label
+- `fig_*.png`: cluster size, PCA, heatmap, trajectory plot
+
+## 분석 방향
+
+1. 당뇨병 발생자만 선택합니다.
+2. 진단 시점 기준 변수 또는 진단 전 trajectory summary feature를 만듭니다.
+3. 결측률이 높은 feature와 대상자를 제외합니다.
+4. median/KNN/iterative imputation 중 하나로 결측을 대체합니다.
+5. feature를 표준화하고 k-means/GMM/hierarchical clustering을 수행합니다.
+6. cluster profile과 trajectory plot으로 subtype 해석 가능성을 확인합니다.
+
+자세한 연구 정리는 [docs/project_summary.md](docs/project_summary.md)를 참고하세요.

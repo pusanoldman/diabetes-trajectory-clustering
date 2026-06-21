@@ -1,0 +1,28 @@
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.matplotlib_cache/
+.venv*/
+venv/
+env/
+
+# Private data and generated outputs
+data/*
+!data/.gitkeep
+outputs/
+custom_clustering_outputs/
+results/
+
+# Local research files that may contain sensitive or unpublished material
+*.csv
+*.xlsx
+*.xls
+*.sas7bdat
+*.docx
+*.pdf
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
