@@ -109,6 +109,107 @@ result["k_evaluation"]
 - `transforms`: log/log1p 변환할 변수
 - `nonpositive_as_na`: 0 이하 값을 결측 처리할 변수
 
+## `cluster_base_vars`에 넣을 수 있는 base 변수
+
+`cluster_base_vars`에는 `AS1_BMI`, `AS2_BMI`처럼 반복 측정 컬럼에서 `AS{기수}_`를 뺀 base name을 넣습니다. 예를 들어 데이터에 `AS1_TG`, `AS2_TG`가 있으면 config에는 `TG`만 적습니다.
+
+기본 추천 조합:
+
+```python
+CLUSTER_VARS = ["HBA1C", "BMI", "HOMA_IR", "HOMA_B"]
+```
+
+임상적으로 해석하기 좋은 추가 후보:
+
+```python
+["TG", "HDL", "공복혈당", "공복인슐린", "허리둘레", "수축기혈압", "이완기혈압"]
+```
+
+OGTT/인슐린 반응 관련 후보:
+
+```python
+["60분혈당", "120분혈당", "60분인슐린", "120분인슐린", "AUCglucose", "AUCinsulin"]
+```
+
+간/신장/지질 관련 후보:
+
+```python
+["ALT", "AST", "BUN", "CREATININE", "TCHL", "TG", "HDL"]
+```
+
+파생 지표 후보:
+
+```python
+["HOMA_IR", "HOMA_B", "IGI60", "ISI", "ISSI2", "DI", "meanPG", "meanPI"]
+```
+
+반복 측정으로 감지된 전체 base 변수 목록:
+
+```text
+120분인슐린
+120분인슐린_pmol
+120분혈당
+120분혈당당뇨
+120분혈당당뇨병
+60분인슐린
+60분인슐린_pmol
+60분혈당
+ALT
+AST
+AUCglucose
+AUCinsulin
+AUCinuslinglucose
+BMI
+BUN
+CREATININE
+DI
+DI_mgdL
+FU_YEAR
+HBA1C
+HBA1C당뇨
+HBA1C당뇨병
+HDL
+HOMA_B
+HOMA_IR
+HbA1C당뇨병
+IGI60
+IGI60_mgdL
+ISI
+ISSI2
+TCHL
+TG
+meanPG
+meanPI
+newDM
+검진개월
+검진개월수
+검진개월수_200100기준
+검진일
+고혈압현재치료여부
+공복인슐린
+공복인슐린_pmol
+공복혈당
+공복혈당당뇨
+공복혈당당뇨병
+공복혈당당뇨병진단
+교육수준
+당뇨병가족력
+성별
+수축기혈압
+연령
+월평균수입
+음주여부
+의사당뇨병진단
+의사당뇨진단
+의사진단당뇨
+의사진단당뇨병
+이완기혈압
+허리둘레
+현재흡연여부
+```
+
+주의: `newDM`, `의사당뇨병진단`, `공복혈당당뇨병`, `HBA1C당뇨병`, `120분혈당당뇨병`처럼 당뇨병 진단 여부나 진단 기준에 가까운 변수는 clustering 변수로 넣으면 결과 해석이 왜곡될 수 있습니다. 처음에는 4-8개 정도의 연속형 임상변수로 시작하는 것을 권장합니다.
+
 ## 결과물
 
 실행 후 `outputs/` 아래에 다음 파일들이 생성됩니다.
