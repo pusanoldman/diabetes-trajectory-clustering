@@ -18,7 +18,7 @@
 - 당뇨병 발생 여부: `status_당뇨병`
 - 당뇨병 발생 또는 추적 기간: `tt_당뇨병`
 - 반복 측정 변수: `AS1_BMI`, `AS2_BMI`, ..., `AS10_BMI`처럼 `AS{기수}_{변수명}` 구조
-- 추적 시간 변수: `AS2_FU_YEAR` 또는 `AS2_검진개월수`처럼 기수별 추적 기간
+- 추적 시간 변수: 기수별 추적 기간을 나타내는 컬럼
 
 현재 연구 메모 기준으로 전체 10020명 중 기존 당뇨병 환자를 제외한 7850명을 최대 20년 추적했고, 추적 중 당뇨병 발생자는 2066명입니다.
 
@@ -143,72 +143,63 @@ OGTT/인슐린 반응 관련 후보:
 ["HOMA_IR", "HOMA_B", "IGI60", "ISI", "ISSI2", "DI", "meanPG", "meanPI"]
 ```
 
-반복 측정으로 감지된 전체 base 변수 목록:
+실제로 clustering에 우선 고려할 base 변수 목록:
 
 ```text
-120분인슐린
-120분인슐린_pmol
-120분혈당
-120분혈당당뇨
-120분혈당당뇨병
-60분인슐린
-60분인슐린_pmol
-60분혈당
-ALT
-AST
-AUCglucose
-AUCinsulin
-AUCinuslinglucose
 BMI
-BUN
-CREATININE
-DI
-DI_mgdL
-FU_YEAR
 HBA1C
-HBA1C당뇨
-HBA1C당뇨병
-HDL
 HOMA_B
 HOMA_IR
-HbA1C당뇨병
+TG
+HDL
+공복혈당
+공복인슐린
+허리둘레
+수축기혈압
+이완기혈압
+60분혈당
+120분혈당
+60분인슐린
+120분인슐린
+AUCglucose
+AUCinsulin
+ALT
+AST
+BUN
+CREATININE
+TCHL
 IGI60
-IGI60_mgdL
 ISI
 ISSI2
-TCHL
-TG
+DI
 meanPG
 meanPI
-newDM
-검진개월
-검진개월수
-검진개월수_200100기준
-검진일
-고혈압현재치료여부
-공복인슐린
-공복인슐린_pmol
-공복혈당
-공복혈당당뇨
-공복혈당당뇨병
-공복혈당당뇨병진단
-교육수준
-당뇨병가족력
-성별
-수축기혈압
-연령
-월평균수입
-음주여부
-의사당뇨병진단
-의사당뇨진단
-의사진단당뇨
-의사진단당뇨병
-이완기혈압
-허리둘레
-현재흡연여부
 ```
 
-주의: `newDM`, `의사당뇨병진단`, `공복혈당당뇨병`, `HBA1C당뇨병`, `120분혈당당뇨병`처럼 당뇨병 진단 여부나 진단 기준에 가까운 변수는 clustering 변수로 넣으면 결과 해석이 왜곡될 수 있습니다. 처음에는 4-8개 정도의 연속형 임상변수로 시작하는 것을 권장합니다.
+오른쪽 꼬리가 긴 변수는 config의 `transforms` 설정에 따라 log 변환됩니다. 현재 trajectory config에서는 다음 변수가 `log1p` 변환됩니다.
+
+```json
+"transforms": {
+  "HOMA_IR": "log1p",
+  "TG": "log1p",
+  "공복인슐린": "log1p",
+  "60분인슐린": "log1p",
+  "120분인슐린": "log1p",
+  "AUCinsulin": "log1p"
+}
+```
+
+예를 들어 `CLUSTER_VARS`에 `HOMA_IR`를 넣으면 실제 feature matrix에는 `log1p_HOMA_IR`가 만들어지고, 그 값이 clustering에 들어갑니다. `TG`, `공복인슐린`, `60분인슐린`, `120분인슐린`, `AUCinsulin`도 같은 방식입니다.
+
+0 이하 값 처리는 `nonpositive_as_na`에서 지정합니다.
+
+```json
+"nonpositive_as_na": ["HOMA_IR", "HOMA_B"]
+```
+
+즉 `HOMA_IR`, `HOMA_B`의 0 이하 값은 결측으로 처리됩니다. `HOMA_B`는 현재 기본 config에서 log 변환하지 않고 0 이하 결측 처리만 합니다. `HOMA_B`도 오른쪽 꼬리가 심해 log 변환하고 싶으면 `transforms`에 `"HOMA_B": "log1p"`를 추가하면 됩니다.
+
+주의: 당뇨병 진단 여부, 진단 기준 충족 여부, 방문 시점, 검진일처럼 outcome 또는 시간 정보를 직접 나타내는 변수는 clustering 변수로 넣으면 결과 해석이 왜곡될 수 있습니다. 처음에는 4-8개 정도의 연속형 임상변수로 시작하는 것이 좋습니다.
 
 ## 결과물
 
