@@ -18,7 +18,7 @@
 - 당뇨병 발생 여부: `status_당뇨병`
 - 당뇨병 발생 또는 추적 기간: `tt_당뇨병`
 - 반복 측정 변수: `AS1_BMI`, `AS2_BMI`, ..., `AS10_BMI`처럼 `AS{기수}_{변수명}` 구조
-- 추적 시간 변수: `AS2_FU_YEAR` 또는 `AS2_검진개월수`처럼 기수별 추적 기간
+- 추적 시간 변수: 기수별 추적 기간을 나타내는 컬럼
 
 현재 연구 메모 기준으로 전체 10020명 중 기존 당뇨병 환자를 제외한 7850명을 최대 20년 추적했고, 추적 중 당뇨병 발생자는 2066명입니다.
 
@@ -108,6 +108,116 @@ result["k_evaluation"]
 - `min_visits`: trajectory 분석에 필요한 최소 관찰 기수 수
 - `transforms`: log/log1p 변환할 변수
 - `nonpositive_as_na`: 0 이하 값을 결측 처리할 변수
+
+## `cluster_base_vars`에 넣을 수 있는 base 변수
+
+`cluster_base_vars`에는 `AS1_BMI`, `AS2_BMI`처럼 반복 측정 컬럼에서 `AS{기수}_`를 뺀 base name을 넣습니다. 예를 들어 데이터에 `AS1_TG`, `AS2_TG`가 있으면 config에는 `TG`만 적습니다.
+
+기본 추천 조합:
+
+```python
+CLUSTER_VARS = ["HBA1C", "BMI", "HOMA_IR", "HOMA_B"]
+```
+
+임상적으로 해석하기 좋은 추가 후보:
+
+```python
+["TG", "HDL", "공복혈당", "공복인슐린", "허리둘레", "수축기혈압", "이완기혈압"]
+```
+
+OGTT/인슐린 반응 관련 후보:
+
+```python
+["60분혈당", "120분혈당", "60분인슐린", "120분인슐린", "AUCglucose", "AUCinsulin"]
+```
+
+간/신장/지질 관련 후보:
+
+```python
+["ALT", "AST", "BUN", "CREATININE", "TCHL", "TG", "HDL"]
+```
+
+파생 지표 후보:
+
+```python
+["HOMA_IR", "HOMA_B", "IGI60", "ISI", "ISSI2", "DI", "meanPG", "meanPI"]
+```
+
+실제로 clustering에 우선 고려할 base 변수 목록:
+
+```text
+BMI
+HBA1C
+HOMA_B
+HOMA_IR
+TG
+HDL
+공복혈당
+공복인슐린
+허리둘레
+수축기혈압
+이완기혈압
+60분혈당
+120분혈당
+60분인슐린
+120분인슐린
+AUCglucose
+AUCinsulin
+ALT
+AST
+BUN
+CREATININE
+TCHL
+IGI60
+ISI
+ISSI2
+DI
+meanPG
+meanPI
+```
+
+오른쪽 꼬리가 긴 변수는 config의 `transforms` 설정에 따라 log 변환됩니다. 현재 trajectory config에서는 다음 변수가 `log1p` 변환됩니다.
+
+```json
+"transforms": {
+  "HOMA_IR": "log1p",
+  "TG": "log1p",
+  "공복인슐린": "log1p",
+  "60분인슐린": "log1p",
+  "120분인슐린": "log1p",
+  "AUCinsulin": "log1p"
+}
+```
+
+예를 들어 `CLUSTER_VARS`에 `HOMA_IR`를 넣으면 실제 feature matrix에는 `log1p_HOMA_IR`가 만들어지고, 그 값이 clustering에 들어갑니다. `TG`, `공복인슐린`, `60분인슐린`, `120분인슐린`, `AUCinsulin`도 같은 방식입니다.
+
+0 이하 값 처리는 `nonpositive_as_na`에서 지정합니다.
+
+```json
+"nonpositive_as_na": ["HOMA_IR", "HOMA_B"]
+```
+
+즉 `HOMA_IR`, `HOMA_B`의 0 이하 값은 결측으로 처리됩니다. `HOMA_B`는 현재 기본 config에서 log 변환하지 않고 0 이하 결측 처리만 합니다. `HOMA_B`도 오른쪽 꼬리가 심해 log 변환하고 싶으면 `transforms`에 `"HOMA_B": "log1p"`를 추가하면 됩니다.
+
+이상치는 IQR 기준으로 제거하지 않고, 변수별 1-99% 분위수 기준으로 winsorization합니다.
+
+```json
+"winsorize": true,
+"winsorize_q": [0.01, 0.99]
+```
+
+즉 하위 1%보다 작은 값은 1% 분위수 값으로 올리고, 상위 99%보다 큰 값은 99% 분위수 값으로 내립니다. 대상자를 삭제하는 방식이 아니라 극단값을 경계값으로 잘라내는 방식입니다.
+
+전처리 순서는 다음과 같습니다.
+
+1. `nonpositive_as_na`에 지정된 변수의 0 이하 값을 결측 처리
+2. `transforms`에 지정된 변수에 log/log1p 변환 적용
+3. 변수별 1-99% 분위수 winsorization
+4. 결측 대체
+5. 표준화
+6. clustering
+
+주의: 당뇨병 진단 여부, 진단 기준 충족 여부, 방문 시점, 검진일처럼 outcome 또는 시간 정보를 직접 나타내는 변수는 clustering 변수로 넣으면 결과 해석이 왜곡될 수 있습니다. 처음에는 4-8개 정도의 연속형 임상변수로 시작하는 것이 좋습니다.
 
 ## 결과물
 

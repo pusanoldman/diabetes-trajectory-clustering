@@ -92,6 +92,16 @@ def load_config(config_path: str | Path | None = None, overrides: dict[str, Any]
     return config
 
 
+def make_json_ready(value: Any) -> Any:
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, dict):
+        return {k: make_json_ready(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [make_json_ready(item) for item in value]
+    return value
+
+
 def read_csv_safely(path: str | Path) -> pd.DataFrame:
     path = Path(path).expanduser()
     last_error: Exception | None = None
@@ -253,7 +263,11 @@ def safe_auc_mean(t: np.ndarray, y: np.ndarray) -> float:
     span = t.max() - t.min()
     if span <= 0:
         return np.nan
-    return float(np.trapezoid(y, t) / span)
+    if hasattr(np, "trapezoid"):
+        auc = np.trapezoid(y, t)
+    else:
+        auc = np.trapz(y, t)
+    return float(auc / span)
 
 
 def summarize_one_variable(group: pd.DataFrame, var: str, features: list[str]) -> dict[str, float]:
@@ -617,7 +631,7 @@ def run_pipeline(config: dict[str, Any]) -> dict[str, Any]:
 
     if config.get("save_outputs", True):
         with (out_dir / "run_config_resolved.json").open("w", encoding="utf-8") as f:
-            json.dump(config, f, ensure_ascii=False, indent=2)
+            json.dump(make_json_ready(config), f, ensure_ascii=False, indent=2)
         pd.Series(available_bases, name="available_base_variable").to_csv(out_dir / "available_as_base_variables.csv", index=False, encoding="utf-8-sig")
         feature_matrix.to_csv(out_dir / "feature_matrix_before_imputation.csv", encoding="utf-8-sig")
         x_imputed.to_csv(out_dir / "feature_matrix_imputed.csv", encoding="utf-8-sig")
